@@ -1,0 +1,31 @@
+# Simulation outputs and field files (large HDF5 binaries)
+outputs/
+fields/
+*.h5
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+.env
+
+# Jupyter
+.jupyter/
+
+# Claude internal
+.claude/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
