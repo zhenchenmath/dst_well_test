@@ -9,150 +9,278 @@ simple, correct, and progressively more complex so learnings transfer to real se
 
 ---
 
-## Plan overview
+## Language split
 
-Three self-contained Julia scripts, one per physics case, plus a shared utilities
-module. Each case runs the same DST schedule and produces the same family of
-diagnostic plots. Only the fluid physics changes between cases.
+| Layer | Language | Purpose |
+|---|---|---|
+| Field generation | Python | Generate perm/poro/well-mask fields, save as .h5 |
+| Config & orchestration | Python | YAML config, pydantic validation, run management |
+| Simulation | Julia (JutulDarcy) | Reservoir simulation only — never touched by user |
+| PTA analysis | Python | Bourdet derivative, Horner, pseudo-pressure |
+| Plotting / notebooks | Python | matplotlib figures, Jupyter, HTML output |
 
-### Case 1 — Single-phase slightly compressible oil (`case1_single_phase.jl`)
-The textbook baseline. Isolates what k and φ do independently.
-- Fluid: single `LiquidPhase()`, weakly compressible, constant viscosity
-- Reservoir: homogeneous, uniform initial pressure (~300 bar)
-- Parameter sweep: k = [10, 100, 1000] mD × φ = [0.10, 0.25]
-- What to observe: k controls derivative plateau height and semilog slope;
-  φ controls time-shift of flow regime transitions (higher φ → slower transient)
-
-### Case 2 — Two-phase oil + water immiscible (`case2_oil_water.jl`)
-Introduces relative permeability effects. Shows that PTA measures effective k, not absolute k.
-- Fluid: `ImmiscibleSystem` with `LiquidPhase()` + `AqueousPhase()`, Corey rel-perms
-- Initial condition: Sw = 0.2 (connate water), same p as Case 1
-- Additional sweep variable: Sw_init = [0.2, 0.4] to show how water saturation
-  shifts the apparent permeability seen by PTA
-- What to observe: derivative plateau shifts relative to Case 1 by factor of k_ro(Sw)
-
-### Case 3 — Single-phase gas (`case3_gas.jl`)
-Shows why raw pressure analysis breaks down for gas and introduces pseudo-pressure.
-- Fluid: single `VaporPhase()` with pressure-dependent μ and Z
-- Same k/φ sweep as Case 1
-- Post-process in both raw Δp and pseudo-pressure Δm(p) space
-- What to observe: raw derivative curves are distorted; Δm(p) restores textbook shape
+The user works exclusively in Python and YAML. Julia is a black box invoked via
+subprocess. The Python → Julia interface is: config JSON + field HDF5 in,
+results HDF5 out.
 
 ---
 
-## Shared utilities (`dst_utils.jl`)
+## Project structure
 
-Helper functions used by all three cases:
-- `log_timesteps(t_total, n_steps)` — logarithmically spaced timestep vector
-- `bourdet_derivative(dt, dp; L=0.2)` — Bourdet log derivative with smoothing parameter
-- `horner_time(tp, dt)` — (tp + Δt)/Δt for Horner plot x-axis
-- `pseudo_pressure(p_vec, μ_fn, Z_fn, p_ref)` — numerical integration of m(p) for Case 3
-- Plotting functions using CairoMakie (headless-safe, no GLMakie dependency)
-  - `plot_loglog(dt, dp, label)` — log-log diagnostic with derivative overlay
-  - `plot_horner(horner_x, p_ws, label)` — Horner plot
-  - Both functions accept arrays of curves for overlay comparison
+```
+dst_well_testing/
+├── CLAUDE.md
+├── Project.toml / Manifest.toml    ← Julia env (JutulDarcy, CairoMakie, HDF5)
+├── configs/                        ← YAML experiment configs (tracked in git)
+│   ├── single_phase_perm_sensitivity/
+│   │   ├── base_k100_phi025.yaml
+│   │   ├── var_k10_phi025.yaml
+│   │   └── var_k1000_phi025.yaml
+│   └── ...
+├── fields/                         ← generated .h5 field files (gitignored)
+├── outputs/                        ← simulation results (gitignored)
+│   └── {experiment}/
+│       └── {run}/
+│           ├── config.yaml         ← copy of config for reproducibility
+│           ├── results.h5
+│           └── plots/
+├── src/                            ← core Python library
+│   ├── config_schema.py            ← pydantic models for YAML validation
+│   ├── simulation_model.py         ← SimulationModel class + .simulate()
+│   ├── pta_analysis.py             ← Bourdet, Horner, pseudo-pressure
+│   └── plotting.py                 ← matplotlib figures, multi-run overlays
+├── field_generator/                ← semi-independent subproject
+│   ├── generate_field.py           ← CLI: template → fields/*.h5
+│   └── templates/
+│       ├── homogeneous.py
+│       ├── layered.py
+│       └── geostatistical.py       ← geostatspy (SGS, variogram-based)
+├── julia_backend/
+│   └── run_simulation.jl           ← reads config JSON + field .h5, writes results .h5
+├── run_sim.py                      ← main CLI entry point
+└── notebooks/                      ← Jupyter notebooks for analysis
+```
+
+---
+
+## Experiment / run management
+
+Two-level hierarchy:
+- **Experiment**: a group of related runs exploring one physics question
+  (e.g., "how does k affect PTA in single-phase oil?")
+- **Run**: one specific simulation — typically a base case plus variations
+  that perturb one parameter at a time
+
+One YAML config = one run. Grouping is done by placing related configs in the
+same subfolder under `configs/{experiment}/` and naming runs descriptively
+(`base_k100_phi025`, `var_k10`, `var_high_phi`).
+
+Cross-examination (overlaying multiple runs) happens in notebooks:
+```python
+exp = load_experiment('outputs/single_phase_perm_sensitivity/')
+# returns {run_name: DSTResults} for all runs in that experiment
+plot_bourdet_overlay(exp)
+```
+
+---
+
+## YAML config schema
+
+```yaml
+experiment:
+  name: single_phase_perm_sensitivity   # maps to outputs/{name}/{run}/
+  run: base_k100_phi025
+  description: "Base case, single-phase oil"
+
+grid:
+  nx: 50
+  ny: 50
+  nz: 1
+  lx: 2000.0    # meters
+  ly: 2000.0
+  lz: 10.0
+
+fluid:
+  type: single_oil      # single_oil | oil_water | gas
+  viscosity: 1.0e-3     # Pa·s
+  compressibility: 1.0e-9  # Pa^-1
+  # oil_water additional fields:
+  # sw_init: 0.2
+  # krw_max: 0.3
+  # kro_max: 0.8
+  # corey_nw: 2.0
+  # corey_no: 2.0
+
+rock:
+  field_h5: fields/homogeneous_50x50.h5  # always required; contains perm, poro, well_mask
+
+schedule:
+  drawdown_duration_hr: 24
+  buildup_duration_hr: 48
+  rate_m3_day: 100.0
+  steps_per_phase: 30
+
+pta:
+  bourdet_L: 0.2
+```
+
+---
+
+## Field HDF5 schema
+
+File: `fields/{name}.h5`
+
+| Dataset | Shape | Dtype | Units |
+|---|---|---|---|
+| `/perm` | (nz, ny, nx) | float64 | m² (SI) |
+| `/poro` | (nz, ny, nx) | float64 | dimensionless |
+| `/well_mask` | (nz, ny, nx) | bool | True = well cell |
+
+Array axis order is (z, y, x) throughout. Unit conversions (mD → m²) happen
+in the field generator, not in the simulation backend.
+
+Well location is a mask, not a coordinate. This supports the future interactive
+2D drawing tool where the user paints well locations on the grid.
+
+---
+
+## Results HDF5 schema
+
+File: `outputs/{experiment}/{run}/results.h5`
+
+| Dataset | Shape | Description |
+|---|---|---|
+| `/time` | (n_steps,) | Time since start of drawdown, seconds |
+| `/pressure_well` | (n_steps,) | Bottom-hole pressure, Pa |
+| `/phase` | (n_steps,) | 0 = drawdown, 1 = buildup |
+
+Additional datasets added per fluid case (e.g., `/saturation_water` for Case 2).
+
+---
+
+## Physics cases
+
+### Case 1 — Single-phase slightly compressible oil
+- Fluid: `LiquidPhase()`, weakly compressible, constant viscosity
+- Reservoir: homogeneous, uniform initial pressure (~300 bar)
+- What to observe: k controls derivative plateau height; φ controls time-shift
+
+### Case 2 — Two-phase oil + water immiscible
+- Fluid: `ImmiscibleSystem`, Corey rel-perms
+- Initial condition: Sw = 0.2 (connate water)
+- What to observe: derivative plateau shifts by factor of k_ro(Sw) vs Case 1
+
+### Case 3 — Single-phase gas
+- Fluid: `VaporPhase()`, pressure-dependent μ and Z
+- Post-process in both raw Δp and pseudo-pressure Δm(p) space
+- What to observe: raw derivative distorted; Δm(p) restores textbook shape
 
 ---
 
 ## DST schedule (same for all cases)
 
-| Phase      | Duration | Well control                        |
-|------------|----------|-------------------------------------|
-| Drawdown   | 24 hours | Constant rate (surface liquid rate) |
-| Buildup    | 48 hours | Shut-in (zero rate / DisabledControl) |
+| Phase    | Duration | Control |
+|---|---|---|
+| Drawdown | 24 hours | Constant rate (surface liquid rate) |
+| Buildup  | 48 hours | Shut-in (`DisabledControl()` or `TotalRateTarget(0.0)`) |
 
-Timesteps: logarithmically spaced within each phase — fine at the start of each
-phase (where transient changes fast), coarser at the end. Approximately 30 steps
-per phase. This is critical for capturing the early-time derivative shape on log-log.
+Timesteps: logarithmically spaced within each phase, ~30 steps per phase.
+Fine at phase start (fast transient), coarser at end.
 
 ---
 
 ## Grid design
 
-- Type: Cartesian (JutulDarcy does not have a native cylindrical mesh)
-- Dimensions: 2000m × 2000m × 10m (single layer for Cases 1 and 2; same for Case 3)
-- Cells: ~50 × 50 × 1
-- Well: single vertical well at the center cell (25, 25, 1)
-- Boundary: closed (no-flow) — large enough that boundary effects do not appear
-  within the 72h test window for the k values in the sweep (verify with radius of
-  investigation estimate: r_inv ≈ 0.032 * sqrt(k * t / φ μ ct))
+- Type: Cartesian (JutulDarcy has no native cylindrical mesh)
+- Dimensions: 2000m × 2000m × 10m, single layer
+- Cells: 50 × 50 × 1
+- Boundary: closed (no-flow)
+- Well: determined by `/well_mask` in field .h5 (center cell by default)
+
+Verify boundary effects do not appear within 72h window:
+`r_inv ≈ 0.032 * sqrt(k * t / φ μ ct)`
 
 ---
 
-## Key implementation notes and caveats
+## Key Julia implementation notes
 
 ### Shut-in control
-JutulDarcy does not have a literal shut-in control. The approach is to use either:
-- `DisabledControl()` — preferred if it compiles cleanly
-- A `TotalRateTarget(0.0)` producer — fallback if DisabledControl causes issues
-Test this in the REPL before committing to either approach.
+Use `DisabledControl()` — preferred. Fall back to `TotalRateTarget(0.0)` if it
+causes compilation issues.
 
-### Timestep structure for forces
-JutulDarcy accepts a vector of `forces`, one entry per timestep block. The DST
-schedule maps to two force blocks:
+### Timestep + forces structure
 ```julia
 forces_dd = setup_reservoir_forces(model, control = Dict(:WELL => producer_dd))
 forces_bu = setup_reservoir_forces(model, control = Dict(:WELL => shut_in))
-dt = [dt_drawdown; dt_buildup]   # concatenated timestep vectors
+dt = [dt_drawdown; dt_buildup]
 forces = [fill(forces_dd, length(dt_drawdown)); fill(forces_bu, length(dt_buildup))]
 ```
 
+### Units — SI only, use built-in helpers
+```julia
+darcy = si_unit(:darcy)   # 9.869e-13 m²
+bar   = si_unit(:bar)     # 1e5 Pa
+day   = si_unit(:day)     # 86400 s
+```
+Do NOT use Unitful.jl.
+
 ### No wellbore storage
-The Peaceman well model in JutulDarcy does not include wellbore storage. The
-unit-slope early-time line on log-log will not appear. This is acceptable for
-this study — we are interested in the reservoir response, not the wellbore mask.
-Document this clearly in plots (add a note to the plot title or annotation).
+Peaceman well model does not include wellbore storage. Unit-slope early-time
+line will not appear. Document this on plots.
 
-### Units
-JutulDarcy uses SI internally. Use the built-in conversion helpers:
-```julia
-using JutulDarcy
-darcy = si_unit(:darcy)       # 9.869e-13 m²
-bar   = si_unit(:bar)         # 1e5 Pa
-day   = si_unit(:day)         # 86400 s
-```
-Do NOT use Unitful.jl — it does not contain oilfield units and will cause errors.
-
-### Near-well grid resolution
-A 50×50 Cartesian grid with 2000m domain gives ~40m cells. This is coarse near
-the wellbore and will smear early-time behavior. If the log-log derivative looks
-noisy or wrong at early time, consider either:
-- Refining the center region (non-uniform dx/dy)
-- Increasing total cell count to 80×80
-
-### Plotting
-Use CairoMakie, not GLMakie. CairoMakie renders to file (PNG/SVG) and works
-headless over SSH. GLMakie requires a display.
-```julia
-using CairoMakie
-```
-Save all figures to an `output/` directory with descriptive filenames.
+### Near-well resolution
+50×50 grid gives ~40m cells — coarse near wellbore. If early-time derivative
+looks wrong, refine center region or increase to 80×80.
 
 ---
 
-## Repo structure (target)
+## Python environment
 
-```
-dst_pta_sandbox/
-├── CLAUDE.md                  ← this file
-├── dst_utils.jl               ← shared helpers (timesteps, derivative, plotting)
-├── case1_single_phase.jl      ← Case 1: single-phase oil
-├── case2_oil_water.jl         ← Case 2: two-phase oil-water
-├── case3_gas.jl               ← Case 3: single-phase gas
-└── output/                    ← generated plots (gitignored or committed)
-    ├── case1_loglog.png
-    ├── case1_horner.png
-    └── ...
-```
+Conda env: `dst_well_testing` (Python 3.11)
+
+| Package | Purpose |
+|---|---|
+| numpy, scipy | numerics, field generation |
+| matplotlib | plotting |
+| pandas | results tables |
+| h5py | HDF5 I/O |
+| pyyaml | YAML config loading |
+| pydantic | config schema validation |
+| geostatspy | geostatistical field generation (SGS) |
+| welltestpy | PTA comparison library (Bourdet derivative) |
+| jupyter | interactive analysis |
 
 ---
 
-## How to start a session
+## Build order
 
-Before writing any code, confirm the following with the user:
-1. Any modifications to the plan (ask explicitly — the user may have changes)
-2. Which case to implement first (suggest Case 1 as the natural starting point)
-3. Whether to implement all sweeps at once or start with a single (k, φ) pair
-   to verify the simulation runs correctly before expanding
+1. ~~Conda env + Julia packages~~ ✓ done
+2. Install pyyaml, pydantic, geostatspy into conda env
+3. Update CLAUDE.md ← current step
+4. `field_generator/templates/homogeneous.py` + `generate_field.py` CLI
+5. `src/config_schema.py` — pydantic models
+6. `julia_backend/run_simulation.jl` — Case 1 first
+7. `src/simulation_model.py` — Python wrapper
+8. `run_sim.py` — CLI
+9. End-to-end test: generate field → run Case 1 → inspect results.h5
+10. `src/pta_analysis.py` — Bourdet (custom + welltestpy comparison)
+11. `src/plotting.py` — log-log diagnostic, Horner, multi-run overlay
+12. Cases 2 and 3
+13. Notebooks
 
-Do not begin implementation until the user confirms they are ready.
+---
+
+## How to run (target CLI)
+
+```bash
+# Generate a field
+python field_generator/generate_field.py --template homogeneous \
+    --nx 50 --ny 50 --perm-md 100 --poro 0.25 \
+    --output fields/homogeneous_50x50.h5
+
+# Run a simulation
+python run_sim.py --config configs/single_phase_perm_sensitivity/base_k100_phi025.yaml
+
+# Results land in:
+# outputs/single_phase_perm_sensitivity/base_k100_phi025/
+```
