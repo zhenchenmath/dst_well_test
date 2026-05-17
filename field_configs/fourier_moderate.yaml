@@ -1,0 +1,20 @@
+template: fourier
+output: fields/fourier_moderate.h5
+
+grid:
+  nx: 50
+  ny: 50
+  nz: 1
+
+well:
+  i: 25
+  j: 25
+  k: 0
+
+params:
+  perm_mean_md: 100.0      # geometric mean (mD)
+  perm_std_log: 1.0        # moderate heterogeneity: P10/P90 span ~7x
+  poro_mean: 0.22
+  poro_std: 0.04
+  correlation_length: 0.2  # ~400m patches on a 2000m domain
+  seed: 42

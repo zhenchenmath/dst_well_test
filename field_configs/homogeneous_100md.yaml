@@ -1,0 +1,16 @@
+template: homogeneous
+output: fields/homogeneous_100md_phi025.h5
+
+grid:
+  nx: 50
+  ny: 50
+  nz: 1
+
+well:
+  i: 25   # 0-indexed center cell
+  j: 25
+  k: 0
+
+params:
+  perm_md: 100.0   # milliDarcy
+  poro: 0.25

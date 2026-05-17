@@ -1,0 +1,30 @@
+template: gmm
+output: fields/gmm_3facies.h5
+
+grid:
+  nx: 50
+  ny: 50
+  nz: 1
+
+well:
+  i: 25
+  j: 25
+  k: 0
+
+params:
+  correlation_length: 0.25  # ~500m facies bodies on a 2000m domain
+  poro_std: 0.03
+  seed: 42
+  facies:
+    - weight: 0.25           # tight shale/mudstone
+      perm_mean_md: 0.5
+      perm_std_log: 0.5
+      poro_mean: 0.08
+    - weight: 0.50           # siltstone / moderate reservoir
+      perm_mean_md: 80.0
+      perm_std_log: 0.8
+      poro_mean: 0.20
+    - weight: 0.25           # clean sandstone / good reservoir
+      perm_mean_md: 600.0
+      perm_std_log: 1.0
+      poro_mean: 0.30
