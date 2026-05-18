@@ -66,6 +66,18 @@ def horner_time(dt: np.ndarray, producing_time_s: float) -> np.ndarray:
     return (producing_time_s + dt) / dt
 
 
+def equivalent_time(dt: np.ndarray, producing_time_s: float) -> np.ndarray:
+    """
+    Agarwal equivalent time for buildup: Δt_e = Δt · tp / (tp + Δt).
+
+    Plotting the buildup Bourdet derivative against Δt_e (instead of Δt)
+    linearizes superposition: an infinite-acting radial flow signature shows
+    up as a flat plateau at the IARF value, just like drawdown, instead of
+    decaying as tp/(tp + Δt).
+    """
+    return dt * producing_time_s / (producing_time_s + dt)
+
+
 @dataclass
 class PTAPhase:
     """PTA data for one flow phase (drawdown or buildup)."""

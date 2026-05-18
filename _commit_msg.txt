@@ -1,0 +1,22 @@
+Add Agarwal equivalent-time PTA plotting
+
+The buildup Bourdet derivative against elapsed time dt naturally decays as
+tp/(tp + dt), which masks "is this still IARF or have I hit a boundary?".
+Equivalent time dt_e = dt * tp / (tp + dt) linearizes superposition: the
+late buildup tail gets squeezed back toward tp, and the IARF plateau
+extends across most decades just like a drawdown.
+
+Changes:
+- src/pta_analysis.py: equivalent_time(dt, tp) helper
+- src/plotting.py: plot_loglog_diagnostic(..., use_equivalent_time=True)
+  and plot_loglog_overlay propagate the flag
+- _make_plots.py (utility script): generates the new comparison plot
+  bourdet_overlay.html showing drawdown vs dt, buildup vs dt, AND
+  buildup vs dt_e all on one log-log; plus loglog_bu_equivalent.html
+  for the equivalent-time-only buildup view
+- docs/experiments/exp_0_baseline/run_1.md: replaced the "TODO equivalent
+  time" note with a proper explanation of dt_e + links to the new plots
+
+Plots regenerated for both run_0 and run_1.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>

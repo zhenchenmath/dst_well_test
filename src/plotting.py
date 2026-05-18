@@ -18,7 +18,7 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from src.pta_analysis import compute_pta
+from src.pta_analysis import compute_pta, equivalent_time
 from src.simulation_model import DSTResults
 
 BAR = 1e5    # Pa per bar
@@ -27,8 +27,16 @@ HR  = 3600.0
 
 def plot_loglog_diagnostic(results: DSTResults, phase: str = "buildup",
                             fig: go.Figure | None = None,
-                            label: str | None = None) -> go.Figure:
-    """Log-log Δp + Bourdet derivative vs Δt. phase: 'drawdown' or 'buildup'."""
+                            label: str | None = None,
+                            use_equivalent_time: bool = False) -> go.Figure:
+    """
+    Log-log Δp + Bourdet derivative vs Δt for one phase.
+
+    If use_equivalent_time=True and phase='buildup', the x-axis is the
+    Agarwal equivalent time Δt_e = Δt·tp/(tp+Δt) instead of Δt. This
+    linearizes superposition so the IARF plateau on buildup matches drawdown
+    instead of decaying as tp/(tp+Δt). No-op for drawdown.
+    """
     pta = compute_pta(results)
     p = pta.buildup if phase == "buildup" else pta.drawdown
     if fig is None:
@@ -36,7 +44,17 @@ def plot_loglog_diagnostic(results: DSTResults, phase: str = "buildup",
     name = label or results.config.experiment.run
 
     valid = ~np.isnan(p.bourdet) & (p.dp > 0) & (p.bourdet > 0)
-    x = p.dt[valid] / HR
+
+    if phase == "buildup" and use_equivalent_time:
+        dt_x = equivalent_time(p.dt, pta.producing_time_s)
+        xlabel = ("Agarwal equivalent time Δt_e = Δt·tp/(tp+Δt)  [h]")
+        title_x = " (equivalent-time)"
+    else:
+        dt_x = p.dt
+        xlabel = f"Elapsed time Δt since {phase} start  [h]"
+        title_x = ""
+
+    x = dt_x[valid] / HR
     fig.add_trace(go.Scatter(x=x, y=p.dp[valid] / BAR,
                              mode="lines+markers", name=f"{name} Δp",
                              legendgroup=name))
@@ -46,9 +64,9 @@ def plot_loglog_diagnostic(results: DSTResults, phase: str = "buildup",
                              name=f"{name} deriv", legendgroup=name))
 
     fig.update_layout(
-        title=f"Log-log diagnostic — {phase}",
+        title=f"Log-log diagnostic — {phase}{title_x}",
         xaxis=dict(
-            title=f"Elapsed time Δt since {phase} start  [h]",
+            title=xlabel,
             type="log", exponentformat="power", showexponent="all",
         ),
         yaxis=dict(
@@ -108,12 +126,16 @@ def plot_bhp(results: DSTResults,
 
 
 def plot_loglog_overlay(experiment: dict[str, DSTResults],
-                         phase: str = "buildup") -> go.Figure:
+                         phase: str = "buildup",
+                         use_equivalent_time: bool = False) -> go.Figure:
     """Overlay log-log diagnostic for all runs in an experiment."""
     fig = go.Figure()
     for name, r in experiment.items():
-        plot_loglog_diagnostic(r, phase=phase, fig=fig, label=name)
-    fig.update_layout(title=f"Log-log overlay — {phase}  ({len(experiment)} runs)")
+        plot_loglog_diagnostic(r, phase=phase, fig=fig, label=name,
+                                use_equivalent_time=use_equivalent_time)
+    suffix = " (equiv. time)" if use_equivalent_time else ""
+    fig.update_layout(
+        title=f"Log-log overlay — {phase}{suffix}  ({len(experiment)} runs)")
     return fig
 
 

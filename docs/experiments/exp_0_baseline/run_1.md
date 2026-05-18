@@ -107,10 +107,18 @@ $$\frac{d(\Delta p_\text{bu})}{d(\ln \Delta t)} = \frac{q \mu}{4 \pi k h} \cdot 
 
 It is flat at the IARF value only while Δt ≪ tp, and decays toward zero as
 Δt grows. So a falling tail at large Δt is **not** automatically a boundary
-artifact — it's intrinsic to plotting derivative vs Δt rather than vs
-superposition / Agarwal equivalent time Δt_e = Δt · tp/(tp+Δt). On equivalent
-time, the plateau extends to late Δt_e. (Equivalent-time plots are a TODO
-for src/plotting.py.)
+artifact — it's intrinsic to plotting derivative vs Δt.
+
+**Fix: Agarwal equivalent time.** Plot the buildup derivative against
+$\Delta t_e = \Delta t \cdot t_p / (t_p + \Delta t)$ instead of Δt. This
+linearizes superposition: the same data points get squeezed back so the
+late-Δt tail lands near $\Delta t_e \to t_p$, and the IARF plateau extends
+across most decades just like a drawdown — making "is this still IARF, or
+have I hit a boundary?" much easier to read.
+
+The function lives at [src/pta_analysis.py](../../../src/pta_analysis.py)
+(`equivalent_time`) and is wired through the plot via
+`plot_loglog_diagnostic(..., use_equivalent_time=True)`.
 
 ## 6. Results
 
@@ -141,8 +149,9 @@ Mid-half plateau ranges (middle 50 % of valid points per phase):
   longer 200 h buildup simply lets the tail decay further.
 
 Plots:
-- Bourdet overlay (both phases + theory plateau line): [plots/bourdet_overlay.html](../../../outputs/exp_0_baseline/run_1/plots/bourdet_overlay.html)
-- Buildup log-log: [plots/loglog_bu.html](../../../outputs/exp_0_baseline/run_1/plots/loglog_bu.html)
+- **Bourdet overlay (the key plot — drawdown vs Δt, buildup vs Δt, buildup vs Δt_e, plus theory line):** [plots/bourdet_overlay.html](../../../outputs/exp_0_baseline/run_1/plots/bourdet_overlay.html)
+- Buildup log-log vs Δt: [plots/loglog_bu.html](../../../outputs/exp_0_baseline/run_1/plots/loglog_bu.html)
+- Buildup log-log vs Δt_e (equivalent time): [plots/loglog_bu_equivalent.html](../../../outputs/exp_0_baseline/run_1/plots/loglog_bu_equivalent.html)
 - Drawdown log-log: [plots/loglog_dd.html](../../../outputs/exp_0_baseline/run_1/plots/loglog_dd.html)
 - Horner plot: [plots/horner.html](../../../outputs/exp_0_baseline/run_1/plots/horner.html)
 
@@ -188,11 +197,8 @@ plot_loglog_overlay(exp, phase="buildup").show()
 2. **Bourdet plateau is ~13 % below theory** due to near-well grid resolution.
    This is a constant bias, so it cancels out when *comparing* runs (which is
    exactly what kh-sensitivity / volume-sensitivity studies care about).
-3. **Buildup derivative tail decay is intrinsic.** For cleaner "is the
-   plateau the same shape?" comparisons, implement equivalent-time PTA
-   plotting (Δt_e = Δt · tp/(tp+Δt)).
-4. **Field units (psia, hours, mD).** Still SI internally — the user has
+3. **Field units (psia, hours, mD).** Still SI internally — the user has
    asked for field-unit display in future plots. Not yet implemented.
-5. **Viscosity / compressibility config-to-Julia override** still not wired
+4. **Viscosity / compressibility config-to-Julia override** still not wired
    up. The 100 mD base case happens to use the default 1 cP so this hasn't
    bitten us, but it will the moment we vary μ.
