@@ -84,8 +84,9 @@ for future multi-well scenarios.
 
 ## Field generation: separate subproject with template system
 
-**Decision:** `field_generator/` is a semi-independent subproject with a CLI
+**Decision:** `src/field_generator/` is a semi-independent subproject with a CLI
 (`generate_field.py`) and a template system. Field configs live in `field_configs/`.
+All Python source code lives under `src/` — field_generator is not an exception.
 
 **Templates implemented:**
 - `homogeneous` — uniform k and φ, baseline for all physics cases
@@ -103,6 +104,33 @@ separate subproject, likely a Jupyter widget or standalone tool).
 
 ---
 
+## Single-phase oil only (Cases 2 and 3 dropped)
+
+**Decision:** The sandbox simulates single-phase slightly compressible oil only.
+Original plan had three physics cases (single-oil, oil-water, gas); cases 2 and 3
+are dropped.
+
+**Why:** The learning goals are kh (perm-thickness) and minimum connected volume
+via Bourdet derivative. Both are fundamentally single-phase phenomena:
+- Plateau height ∝ qBμ/(kh)
+- Boundary effect timing ∝ φ ct Vp
+
+Adding rel-perms (Case 2) or pressure-dependent μ/Z (Case 3) would obscure these
+relationships rather than illuminate them.
+
+---
+
+## Julia backend: avoid CPR preconditioner for single-phase
+
+**Decision:** `simulate_reservoir(...; precond=:ilu0)` instead of the default `:cpr`.
+
+**Why:** JutulDarcy 0.3.7's CPR preconditioner asserts `T_b <: StaticMatrix` on
+Jacobian blocks. With `ImmiscibleSystem((LiquidPhase(),))` (single phase), the
+blocks are scalar `Float64`, not `SMatrix{1,1}`, triggering an assertion error.
+`:ilu0` works for both single- and multi-phase and is plenty fast for our 50×50 grids.
+
+---
+
 ## PTA analysis: custom Bourdet + welltestpy for comparison
 
 **Decision:** Implement Bourdet derivative from scratch in NumPy. Also install `welltestpy`
@@ -114,14 +142,19 @@ cross-checking results but is thinly maintained.
 
 ---
 
-## Plotting: matplotlib, outputs to files only
+## Plotting: Plotly (matplotlib unusable on this machine)
 
-**Decision:** All plots saved to `outputs/{experiment}/{run}/plots/`. No interactive display
-during simulation runs. Jupyter notebooks used for interactive cross-examination.
+**Decision:** `src/plotting.py` uses Plotly, not matplotlib. Plots are saved as
+standalone HTML (`fig.write_html(...)`); also render interactively in Jupyter.
 
-**Preview CLI flag:** `generate_field.py --preview` intended to save a quick PNG alongside
-the `.h5`. Currently blocked by a matplotlib/Windows DLL crash on this machine (exit -1066598273
-on `fig.savefig()`). Core functionality unaffected — to be debugged later.
+**Why:** matplotlib `fig.savefig()` crashes the Python process on this Windows
+machine with exit code -1066598273 (DLL crash, reproduced across PNG/SVG/PDF
+and the `Agg` backend). Plotly works reliably and gives interactive output for
+free, which suits the experiment-comparison workflow better anyway.
+
+**Tradeoff:** HTML files are ~5MB each (bundled plotly.js). Acceptable for
+local analysis; if we ever need lightweight static images, plotly's `kaleido`
+backend can write PNG.
 
 ---
 

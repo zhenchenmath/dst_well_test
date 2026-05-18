@@ -44,17 +44,17 @@ dst_well_testing/
 │           ├── config.yaml         ← copy of config for reproducibility
 │           ├── results.h5
 │           └── plots/
-├── src/                            ← core Python library
+├── src/                            ← all Python source code
 │   ├── config_schema.py            ← pydantic models for YAML validation
 │   ├── simulation_model.py         ← SimulationModel class + .simulate()
 │   ├── pta_analysis.py             ← Bourdet, Horner, pseudo-pressure
-│   └── plotting.py                 ← matplotlib figures, multi-run overlays
-├── field_generator/                ← semi-independent subproject
-│   ├── generate_field.py           ← CLI: template → fields/*.h5
-│   └── templates/
-│       ├── homogeneous.py
-│       ├── layered.py
-│       └── geostatistical.py       ← geostatspy (SGS, variogram-based)
+│   ├── plotting.py                 ← matplotlib figures, multi-run overlays
+│   └── field_generator/            ← semi-independent subproject
+│       ├── generate_field.py       ← CLI: template → fields/*.h5
+│       └── templates/
+│           ├── homogeneous.py
+│           ├── fourier.py
+│           └── gmm.py              ← facies-based (Truncated Gaussian Simulation)
 ├── julia_backend/
 │   └── run_simulation.jl           ← reads config JSON + field .h5, writes results .h5
 ├── run_sim.py                      ← main CLI entry point
@@ -158,22 +158,20 @@ Additional datasets added per fluid case (e.g., `/saturation_water` for Case 2).
 
 ---
 
-## Physics cases
+## Physics: single-phase slightly compressible oil only
 
-### Case 1 — Single-phase slightly compressible oil
-- Fluid: `LiquidPhase()`, weakly compressible, constant viscosity
-- Reservoir: homogeneous, uniform initial pressure (~300 bar)
-- What to observe: k controls derivative plateau height; φ controls time-shift
+The sandbox focuses on Bourdet derivative analysis for two questions:
+1. **kh (perm-thickness)** — plateau height ∝ qBμ/(kh)
+2. **Minimum connected volume** — boundary effect timing ∝ φ ct Vp
 
-### Case 2 — Two-phase oil + water immiscible
-- Fluid: `ImmiscibleSystem`, Corey rel-perms
-- Initial condition: Sw = 0.2 (connate water)
-- What to observe: derivative plateau shifts by factor of k_ro(Sw) vs Case 1
+Single-phase oil is sufficient for both. Two-phase and gas were dropped:
+they add complexity (rel-perm, pressure-dependent μ/Z) without contributing
+to the core learning.
 
-### Case 3 — Single-phase gas
-- Fluid: `VaporPhase()`, pressure-dependent μ and Z
-- Post-process in both raw Δp and pseudo-pressure Δm(p) space
-- What to observe: raw derivative distorted; Δm(p) restores textbook shape
+Setup:
+- Fluid: `ImmiscibleSystem((LiquidPhase(),), reference_densities=(850.0,))`
+- Reservoir: homogeneous or heterogeneous (via field HDF5), uniform initial pressure (~300 bar)
+- Experiments vary k, h, or φ; analysis via Bourdet derivative
 
 ---
 
@@ -255,18 +253,19 @@ Conda env: `dst_well_testing` (Python 3.11)
 ## Build order
 
 1. ~~Conda env + Julia packages~~ ✓ done
-2. Install pyyaml, pydantic, geostatspy into conda env
-3. Update CLAUDE.md ← current step
-4. `field_generator/templates/homogeneous.py` + `generate_field.py` CLI
-5. `src/config_schema.py` — pydantic models
-6. `julia_backend/run_simulation.jl` — Case 1 first
-7. `src/simulation_model.py` — Python wrapper
-8. `run_sim.py` — CLI
-9. End-to-end test: generate field → run Case 1 → inspect results.h5
-10. `src/pta_analysis.py` — Bourdet (custom + welltestpy comparison)
-11. `src/plotting.py` — log-log diagnostic, Horner, multi-run overlay
-12. Cases 2 and 3
-13. Notebooks
+2. ~~Install pyyaml, pydantic, geostatspy, plotly~~ ✓ done
+3. ~~Update CLAUDE.md~~ ✓ done
+4. ~~`src/field_generator/` + CLI~~ ✓ done
+5. ~~`src/config_schema.py` — pydantic models~~ ✓ done
+6. ~~`julia_backend/run_simulation.jl`~~ ✓ done (single-phase oil only)
+7. `src/simulation_model.py` — Python wrapper that serializes YAML→JSON, runs Julia, reads HDF5 ← next
+8. `run_sim.py` — CLI entry point
+9. `src/pta_analysis.py` — Bourdet derivative + Horner
+10. `src/plotting.py` — log-log diagnostic, multi-run overlay
+11. Notebooks for kh and connected-volume experiments
+
+Future TODOs:
+- Propagate viscosity/compressibility from config to JutulDarcy (uses defaults now)
 
 ---
 
@@ -274,9 +273,7 @@ Conda env: `dst_well_testing` (Python 3.11)
 
 ```bash
 # Generate a field
-python field_generator/generate_field.py --template homogeneous \
-    --nx 50 --ny 50 --perm-md 100 --poro 0.25 \
-    --output fields/homogeneous_50x50.h5
+python src/field_generator/generate_field.py field_configs/homogeneous_100md.yaml
 
 # Run a simulation
 python run_sim.py --config configs/single_phase_perm_sensitivity/base_k100_phi025.yaml

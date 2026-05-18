@@ -3,10 +3,10 @@
 CLI for generating reservoir perm/poro field .h5 files.
 
 Usage:
-    python field_generator/generate_field.py <config.yaml> [--preview]
+    python src/field_generator/generate_field.py <config.yaml> [--preview]
 
 Example:
-    python field_generator/generate_field.py field_configs/homogeneous_100md.yaml --preview
+    python src/field_generator/generate_field.py field_configs/homogeneous_100md.yaml --preview
 """
 
 import argparse
