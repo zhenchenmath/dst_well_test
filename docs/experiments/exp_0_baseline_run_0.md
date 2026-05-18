@@ -26,6 +26,21 @@ A "real" first experiment (with field units and a finer grid) will be exp_1+.
 Field file: [fields/homogeneous_100md_phi025.h5](../../fields/homogeneous_100md_phi025.h5)
 Field config: [field_configs/homogeneous_100md.yaml](../../field_configs/homogeneous_100md.yaml)
 
+### Field maps
+
+| Dataset | min | mean / geomean | max |
+|---|---|---|---|
+| `perm` (mD) | 100.0 | 100.0 (geomean) | 100.0 |
+| `poro` | 0.250 | 0.250 (mean) | 0.250 |
+| `well_mask` | — | 1 cell active at (i=25, j=25, k=0) | — |
+
+Interactive heatmap (perm + poro + well marker):
+[plots/field.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/field.html)
+
+Since the field is uniform, the heatmaps look flat — they exist mainly as a
+template for later heterogeneous runs (fourier / GMM templates) where the
+spatial structure matters.
+
 ## 2. Fluid
 
 Single-phase slightly compressible "oil" — actually a `LiquidPhase` in
@@ -121,15 +136,29 @@ Plot: [outputs/.../plots/bhp.html](../../outputs/single_phase_perm_sensitivity/b
 
 ### Bourdet derivative
 
-| Phase | Plateau (mid-time, measured) | Theory | Ratio |
-|---|---|---|---|
-| Buildup, mid samples | ~0.70 – 0.81 bar | 0.93 bar | 0.75 – 0.87 |
-| Drawdown, late | 0.81 – 0.93 bar (rising) | 0.93 bar | 0.87 – 1.0 |
+Numerically derived `dΔp / d(ln Δt)` over the middle half of each phase
+(skipping the first and last 25 % of points, which are L-window-edge or
+boundary-affected):
 
-Plots:
-- Buildup log-log: [loglog_bu.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_bu.html)
-- Drawdown log-log: [loglog_dd.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_dd.html)
-- Horner plot: [horner.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/horner.html)
+| Phase | Measured plateau range | Theory | Notes |
+|---|---|---|---|
+| Drawdown | 0.80 – 0.84 bar | 0.93 bar | ratio 0.86–0.90 |
+| Buildup | 0.34 – 0.77 bar | 0.93 bar | wider; late part dives — boundary feedback |
+
+The drawdown derivative sits ~10–15 % below the analytical IARF plateau, which
+is the expected sign of the coarse 40 m grid (the wellbore is barely resolved).
+The buildup derivative starts near the same value but drops sharply at late
+Δt, consistent with the pressure recovery being driven by the now-finite
+"reservoir" inside the closed boundary rather than purely radial diffusion.
+
+Bourdet-only overlay (both phases on one log-log, with theory plateau):
+[plots/bourdet_overlay.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/bourdet_overlay.html)
+
+Full log-log diagnostics (Δp + derivative together):
+- Buildup: [plots/loglog_bu.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_bu.html)
+- Drawdown: [plots/loglog_dd.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_dd.html)
+
+Horner plot: [plots/horner.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/horner.html)
 
 ### Observations / sanity check
 
