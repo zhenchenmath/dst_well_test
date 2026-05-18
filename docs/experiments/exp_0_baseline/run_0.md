@@ -23,8 +23,8 @@ A "real" first experiment (with field units and a finer grid) will be exp_1+.
 | Boundary | closed (no-flow) on all 6 faces | |
 | Initial pressure | 300 bar | uniform |
 
-Field file: [fields/homogeneous_100md_phi025.h5](../../fields/homogeneous_100md_phi025.h5)
-Field config: [field_configs/homogeneous_100md.yaml](../../field_configs/homogeneous_100md.yaml)
+Field file: [fields/homogeneous_100md_phi025.h5](../../../fields/homogeneous_100md_phi025.h5)
+Field config: [field_configs/homogeneous_100md.yaml](../../../field_configs/homogeneous_100md.yaml)
 
 ### Field maps
 
@@ -35,7 +35,7 @@ Field config: [field_configs/homogeneous_100md.yaml](../../field_configs/homogen
 | `well_mask` | — | 1 cell active at (i=25, j=25, k=0) | — |
 
 Interactive heatmap (perm + poro + well marker):
-[plots/field.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/field.html)
+[plots/field.html](../../../outputs/exp_0_baseline/run_0/plots/field.html)
 
 Since the field is uniform, the heatmaps look flat — they exist mainly as a
 template for later heterogeneous runs (fourier / GMM templates) where the
@@ -89,7 +89,7 @@ the natural log of elapsed time:
 $$\text{deriv}(t) = \frac{d \Delta p}{d \ln \Delta t} = t \frac{d \Delta p}{dt}$$
 
 Computed with L-window smoothing (Bourdet, Ayoub & Pirard 1989) in
-[src/pta_analysis.py](../../src/pta_analysis.py) — see `bourdet_derivative()`.
+[src/pta_analysis.py](../../../src/pta_analysis.py) — see `bourdet_derivative()`.
 
 ### IARF plateau (the "kh" signature)
 
@@ -132,7 +132,7 @@ during this 72 h test. Good.
 - End of drawdown: **285.6 bar** (drop of 14.4 bar in 24 h)
 - End of buildup: **299.15 bar** (recovers within ~0.85 bar of initial)
 
-Plot: [outputs/.../plots/bhp.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/bhp.html)
+Plot: [outputs/.../plots/bhp.html](../../../outputs/exp_0_baseline/run_0/plots/bhp.html)
 
 ### Bourdet derivative
 
@@ -152,13 +152,13 @@ The buildup derivative starts near the same value but drops sharply at late
 "reservoir" inside the closed boundary rather than purely radial diffusion.
 
 Bourdet-only overlay (both phases on one log-log, with theory plateau):
-[plots/bourdet_overlay.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/bourdet_overlay.html)
+[plots/bourdet_overlay.html](../../../outputs/exp_0_baseline/run_0/plots/bourdet_overlay.html)
 
 Full log-log diagnostics (Δp + derivative together):
-- Buildup: [plots/loglog_bu.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_bu.html)
-- Drawdown: [plots/loglog_dd.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/loglog_dd.html)
+- Buildup: [plots/loglog_bu.html](../../../outputs/exp_0_baseline/run_0/plots/loglog_bu.html)
+- Drawdown: [plots/loglog_dd.html](../../../outputs/exp_0_baseline/run_0/plots/loglog_dd.html)
 
-Horner plot: [plots/horner.html](../../outputs/single_phase_perm_sensitivity/base_k100_phi025/plots/horner.html)
+Horner plot: [plots/horner.html](../../../outputs/exp_0_baseline/run_0/plots/horner.html)
 
 ### Observations / sanity check
 
@@ -183,12 +183,12 @@ Horner plot: [plots/horner.html](../../outputs/single_phase_perm_sensitivity/bas
 python src/field_generator/generate_field.py field_configs/homogeneous_100md.yaml
 
 # 2. Run the simulation
-python run_sim.py configs/single_phase_perm_sensitivity/base_k100_phi025.yaml
+python run_sim.py configs/exp_0_baseline/run_0.yaml
 ```
 
-Output goes to `outputs/single_phase_perm_sensitivity/base_k100_phi025/`:
+Output goes to `outputs/exp_0_baseline/run_0/`:
 - `config.yaml` (copy of the input config, for reproducibility)
-- `results.h5` (time, BHP, phase arrays — schema in [CLAUDE.md](../../CLAUDE.md))
+- `results.h5` (time, BHP, phase arrays — schema in [CLAUDE.md](../../../CLAUDE.md))
 
 ### From Python (Jupyter / notebook)
 
@@ -202,7 +202,7 @@ from src.plotting import (
 )
 
 # Load + run a single config
-cfg = load_config("configs/single_phase_perm_sensitivity/base_k100_phi025.yaml")
+cfg = load_config("configs/exp_0_baseline/run_0.yaml")
 sim = SimulationModel(cfg)
 results = sim.simulate()           # returns DSTResults
 
@@ -215,7 +215,7 @@ plot_loglog_diagnostic(results, phase="buildup").show()
 plot_horner(results).show()
 
 # Overlay multiple runs (when you have more)
-exp = load_experiment("outputs/single_phase_perm_sensitivity/")
+exp = load_experiment("outputs/exp_0_baseline/")
 plot_loglog_overlay(exp, phase="buildup").show()
 plot_horner_overlay(exp).show()
 ```
@@ -224,13 +224,13 @@ plot_horner_overlay(exp).show()
 
 | Module | Role |
 |---|---|
-| [src/config_schema.py](../../src/config_schema.py) | pydantic models for YAML configs |
-| [src/field_generator/](../../src/field_generator/) | perm/poro/well-mask `.h5` generator |
-| [src/simulation_model.py](../../src/simulation_model.py) | Python wrapper: YAML → JSON → Julia subprocess → HDF5 results |
-| [julia_backend/run_simulation.jl](../../julia_backend/run_simulation.jl) | JutulDarcy backend (single-phase oil) |
-| [src/pta_analysis.py](../../src/pta_analysis.py) | Bourdet derivative + Horner time |
-| [src/plotting.py](../../src/plotting.py) | Plotly figures (matplotlib broken on this machine) |
-| [run_sim.py](../../run_sim.py) | CLI entry point |
+| [src/config_schema.py](../../../src/config_schema.py) | pydantic models for YAML configs |
+| [src/field_generator/](../../../src/field_generator/) | perm/poro/well-mask `.h5` generator |
+| [src/simulation_model.py](../../../src/simulation_model.py) | Python wrapper: YAML → JSON → Julia subprocess → HDF5 results |
+| [julia_backend/run_simulation.jl](../../../julia_backend/run_simulation.jl) | JutulDarcy backend (single-phase oil) |
+| [src/pta_analysis.py](../../../src/pta_analysis.py) | Bourdet derivative + Horner time |
+| [src/plotting.py](../../../src/plotting.py) | Plotly figures (matplotlib broken on this machine) |
+| [run_sim.py](../../../run_sim.py) | CLI entry point |
 
 ## 7. Known caveats for this run
 

@@ -1,7 +1,7 @@
 experiment:
-  name: single_phase_perm_sensitivity
-  run: base_k100_phi025
-  description: "Base case, single-phase oil, k=100 mD, phi=0.25"
+  name: exp_0_baseline
+  run: run_0
+  description: "Baseline single-phase oil, 50x50 grid, k=100 mD, phi=0.25, q=100 m3/day, 24h dd + 48h bu"
 
 grid:
   nx: 50

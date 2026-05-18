@@ -1,0 +1,29 @@
+experiment:
+  name: exp_0_baseline
+  run: run_1
+  description: "160x160 grid (25 m cells, 4000 m domain), thin layer h=1 m, q=10 m3/day, 24h dd + 200h bu. Sized so r_inv stays well inside no-flow boundary."
+
+grid:
+  nx: 160
+  ny: 160
+  nz: 1
+  lx: 4000.0
+  ly: 4000.0
+  lz: 1.0
+
+fluid:
+  type: single_oil
+  viscosity: 1.0e-3
+  compressibility: 1.0e-9
+
+rock:
+  field_h5: fields/homogeneous_100md_160x160.h5
+
+schedule:
+  drawdown_duration_hr: 24
+  buildup_duration_hr: 200
+  rate_m3_day: 10.0
+  steps_per_phase: 30
+
+pta:
+  bourdet_L: 0.2

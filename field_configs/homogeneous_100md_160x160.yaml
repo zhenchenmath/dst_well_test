@@ -1,0 +1,16 @@
+template: homogeneous
+output: fields/homogeneous_100md_160x160.h5
+
+grid:
+  nx: 160
+  ny: 160
+  nz: 1
+
+well:
+  i: 80   # 0-indexed center cell (160 cells -> indices 0..159 -> center 80)
+  j: 80
+  k: 0
+
+params:
+  perm_md: 100.0   # milliDarcy
+  poro: 0.25

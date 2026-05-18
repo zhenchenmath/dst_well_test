@@ -47,9 +47,15 @@ def plot_loglog_diagnostic(results: DSTResults, phase: str = "buildup",
 
     fig.update_layout(
         title=f"Log-log diagnostic — {phase}",
-        xaxis=dict(title=f"Δt since {phase} start (h)", type="log"),
-        yaxis=dict(title="Δp, dΔp/d(ln Δt) (bar)", type="log"),
-        width=750, height=520,
+        xaxis=dict(
+            title=f"Elapsed time Δt since {phase} start  [h]",
+            type="log", exponentformat="power", showexponent="all",
+        ),
+        yaxis=dict(
+            title="Pressure change Δp  and  Bourdet derivative d(Δp)/d(ln Δt)  [bar]",
+            type="log", exponentformat="power", showexponent="all",
+        ),
+        width=800, height=540,
     )
     return fig
 
@@ -66,11 +72,14 @@ def plot_horner(results: DSTResults,
     fig.add_trace(go.Scatter(x=ht, y=pws, mode="lines+markers",
                              name=label or results.config.experiment.run))
     fig.update_layout(
-        title="Horner plot",
-        xaxis=dict(title="Horner time (tp + Δt) / Δt",
-                   type="log", autorange="reversed"),
-        yaxis=dict(title="BHP (bar)"),
-        width=750, height=520,
+        title="Horner plot — buildup BHP vs Horner time",
+        xaxis=dict(
+            title="Horner time (tp + Δt) / Δt  [dimensionless]",
+            type="log", exponentformat="power", showexponent="all",
+            autorange="reversed",
+        ),
+        yaxis=dict(title="Bottom-hole pressure p_ws  [bar]"),
+        width=800, height=540,
     )
     return fig
 
@@ -90,8 +99,9 @@ def plot_bhp(results: DSTResults,
     fig.add_vline(x=t_shutin, line=dict(dash="dot", color="grey"),
                   annotation_text="shut-in", annotation_position="top right")
     fig.update_layout(
-        title="Bottom-hole pressure",
-        xaxis_title="Time (h)", yaxis_title="BHP (bar)",
+        title="Bottom-hole pressure history",
+        xaxis_title="Elapsed time t  [h]",
+        yaxis_title="Bottom-hole pressure p_wf  [bar]",
         width=800, height=420,
     )
     return fig
