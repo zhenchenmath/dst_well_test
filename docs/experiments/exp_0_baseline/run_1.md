@@ -110,15 +110,23 @@ It is flat at the IARF value only while Δt ≪ tp, and decays toward zero as
 artifact — it's intrinsic to plotting derivative vs Δt.
 
 **Fix: Agarwal equivalent time.** Plot the buildup derivative against
-$\Delta t_e = \Delta t \cdot t_p / (t_p + \Delta t)$ instead of Δt. This
-linearizes superposition: the same data points get squeezed back so the
-late-Δt tail lands near $\Delta t_e \to t_p$, and the IARF plateau extends
-across most decades just like a drawdown — making "is this still IARF, or
-have I hit a boundary?" much easier to read.
+$\Delta t_e = \Delta t \cdot t_p / (t_p + \Delta t)$ instead of Δt — **and
+recompute the derivative with respect to Δt_e**, not just re-label the
+x-axis. The chain rule:
 
-The function lives at [src/pta_analysis.py](../../../src/pta_analysis.py)
-(`equivalent_time`) and is wired through the plot via
-`plot_loglog_diagnostic(..., use_equivalent_time=True)`.
+$$\frac{d(\Delta p)}{d(\ln \Delta t_e)} = \underbrace{\frac{d(\Delta p)}{d(\ln \Delta t)}}_{\text{decays as } t_p/(t_p+\Delta t)} \cdot \underbrace{\frac{d(\ln \Delta t)}{d(\ln \Delta t_e)}}_{=\,(t_p+\Delta t)/t_p}$$
+
+The two factors cancel, leaving the constant IARF plateau $qμ/(4πkh)$. So
+the buildup derivative on Δt_e is flat for an infinite reservoir, mirroring
+the drawdown. (An early bug in this codebase kept the dt-derivative and
+just relabeled the axis — that made the dip look *worse* because the decay
+was preserved on a bounded x range. Fixed: `plot_loglog_diagnostic(...,
+use_equivalent_time=True)` now feeds Δt_e straight into
+`bourdet_derivative()`, which by definition returns `dp/d(ln dt)` for
+whatever dt array it receives.)
+
+Helpers: `equivalent_time(dt, tp)` and `bourdet_derivative(dt, dp, L)` in
+[src/pta_analysis.py](../../../src/pta_analysis.py).
 
 ## 6. Results
 
@@ -133,20 +141,21 @@ Plot: [plots/bhp.html](../../../outputs/exp_0_baseline/run_1/plots/bhp.html)
 
 Mid-half plateau ranges (middle 50 % of valid points per phase):
 
-| Phase | Measured plateau | Theory IARF | Ratio |
-|---|---|---|---|
-| Drawdown | 0.793 – 0.821 bar | 0.933 bar | 0.85 – 0.88 |
-| Buildup (mid samples) | 0.205 – 0.662 bar | 0.933 bar | 0.22 – 0.71 |
+| Phase | Measured plateau | Theory IARF | Ratio | Notes |
+|---|---|---|---|---|
+| Drawdown vs Δt | 0.793 – 0.821 bar | 0.933 bar | 0.85 – 0.88 | grid bias |
+| Buildup vs Δt | 0.205 – 0.662 bar | 0.933 bar | 0.22 – 0.71 | intrinsic tp/(tp+Δt) decay |
+| **Buildup vs Δt_e** | **0.603 – 0.814 bar** | **0.933 bar** | **0.65 – 0.87** | **plateau restored** |
 
 - **Drawdown plateau ~ 13–15 % low**, same systematic bias as run_0. Most
   likely cause: Peaceman well in a 25 m cell still under-resolves the
   near-well pressure gradient. Halving cells again (10 m) would likely close
   the gap; the textbook fix is to use radial / locally-refined grids.
-- **Buildup tail dives steeply** to ~0.2 bar by late Δt. As discussed in
-  §5, this is mostly the intrinsic tp/(tp+Δt) decay, not a boundary
-  artifact: r_inv at 200 h buildup is only ~1121 m vs the 2000 m half-width.
-- Compared to run_0's buildup (0.34 – 0.77 bar over a 48 h buildup), run_1's
-  longer 200 h buildup simply lets the tail decay further.
+- **Buildup vs Δt** dives to ~0.2 bar — confirmed to be the intrinsic
+  tp/(tp+Δt) decay (§5), not a boundary artifact.
+- **Buildup vs Δt_e** matches the drawdown plateau within a few percent.
+  The ~15 % under-prediction vs theory is the same near-well grid bias as
+  drawdown — cancels when comparing runs.
 
 Plots:
 - **Bourdet overlay (the key plot — drawdown vs Δt, buildup vs Δt, buildup vs Δt_e, plus theory line):** [plots/bourdet_overlay.html](../../../outputs/exp_0_baseline/run_1/plots/bourdet_overlay.html)

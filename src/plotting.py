@@ -18,7 +18,8 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from src.pta_analysis import compute_pta, equivalent_time
+from src.pta_analysis import (compute_pta, equivalent_time,
+                                bourdet_derivative)
 from src.simulation_model import DSTResults
 
 BAR = 1e5    # Pa per bar
@@ -43,22 +44,29 @@ def plot_loglog_diagnostic(results: DSTResults, phase: str = "buildup",
         fig = go.Figure()
     name = label or results.config.experiment.run
 
-    valid = ~np.isnan(p.bourdet) & (p.dp > 0) & (p.bourdet > 0)
-
     if phase == "buildup" and use_equivalent_time:
+        # Re-compute Bourdet derivative w.r.t. Δt_e directly. Re-labeling the
+        # x-axis to Δt_e while keeping the dt-derivative is WRONG (it leaves
+        # the tp/(tp+Δt) decay in the y values). Feeding Δt_e to
+        # bourdet_derivative() gives d(Δp)/d(ln Δt_e), which is flat at the
+        # IARF plateau for an infinite reservoir.
+        L = results.config.pta.bourdet_L
         dt_x = equivalent_time(p.dt, pta.producing_time_s)
-        xlabel = ("Agarwal equivalent time Δt_e = Δt·tp/(tp+Δt)  [h]")
+        bourdet_x = bourdet_derivative(dt_x, p.dp, L=L)
+        xlabel = "Agarwal equivalent time Δt_e = Δt·tp/(tp+Δt)  [h]"
         title_x = " (equivalent-time)"
     else:
         dt_x = p.dt
+        bourdet_x = p.bourdet
         xlabel = f"Elapsed time Δt since {phase} start  [h]"
         title_x = ""
 
+    valid = ~np.isnan(bourdet_x) & (p.dp > 0) & (bourdet_x > 0)
     x = dt_x[valid] / HR
     fig.add_trace(go.Scatter(x=x, y=p.dp[valid] / BAR,
                              mode="lines+markers", name=f"{name} Δp",
                              legendgroup=name))
-    fig.add_trace(go.Scatter(x=x, y=p.bourdet[valid] / BAR,
+    fig.add_trace(go.Scatter(x=x, y=bourdet_x[valid] / BAR,
                              mode="lines+markers",
                              marker_symbol="square", line=dict(dash="dash"),
                              name=f"{name} deriv", legendgroup=name))
